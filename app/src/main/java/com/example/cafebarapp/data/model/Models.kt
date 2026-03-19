@@ -28,6 +28,13 @@ data class Usuario(
     @SerializedName("activo") val activo: Boolean
 )
 
+data class Categoria(
+    @SerializedName("idCategoria") val idCategoria: Int,
+    @SerializedName("nombre") val nombre: String,
+    @SerializedName("icono") val icono: String?,
+    @SerializedName("activo") val activo: Boolean
+)
+
 data class Producto(
     @SerializedName("idProducto") val idProducto: Int,
     @SerializedName("nombre") val nombre: String,
@@ -37,6 +44,14 @@ data class Producto(
     @SerializedName("imagenUrl") val imagenUrl: String?,
     @SerializedName("stock") val stock: Int,
     @SerializedName("idCategoria") val idCategoria: Int?
+)
+
+data class Mesa(
+    @SerializedName("idMesa") val idMesa: Int,
+    @SerializedName("numeroMesa") val numeroMesa: Int,
+    @SerializedName("capacidad") val capacidad: Int,
+    @SerializedName("ubicacion") val ubicacion: String?,
+    @SerializedName("estado") val estado: String
 )
 
 data class Pedido(
@@ -83,7 +98,7 @@ data class NuevaReserva(
     @SerializedName("duracionEstimada") val duracionEstimada: Int = 60
 )
 
-// Modelo del carrito (solo local, no va a la BD)
+// Modelo del carrito (solo local)
 data class ItemCarrito(
     val producto: Producto,
     val cantidad: Int

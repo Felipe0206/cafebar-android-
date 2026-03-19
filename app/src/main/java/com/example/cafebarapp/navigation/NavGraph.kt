@@ -3,6 +3,7 @@ package com.example.cafebarapp.navigation
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.cafebarapp.data.model.Usuario
 import com.example.cafebarapp.data.network.RetrofitClient
 import com.example.cafebarapp.data.repository.AuthRepository
+import com.example.cafebarapp.data.repository.CategoriaRepository
 import com.example.cafebarapp.data.repository.PedidoRepository
 import com.example.cafebarapp.data.repository.ProductoRepository
 import com.example.cafebarapp.data.repository.ReservaRepository
@@ -30,10 +32,11 @@ import com.example.cafebarapp.ui.pedidos.PedidosScreen
 import com.example.cafebarapp.ui.pedidos.PedidosViewModel
 import com.example.cafebarapp.ui.reservas.ReservasScreen
 import com.example.cafebarapp.ui.reservas.ReservasViewModel
+import com.example.cafebarapp.ui.theme.CafeOscuro
+import com.example.cafebarapp.ui.theme.Dorado
+import com.example.cafebarapp.ui.theme.TextoGris
 
-// Rutas de navegación
 object Rutas {
-    const val LOGIN = "login"
     const val MENU = "menu"
     const val PEDIDOS = "pedidos"
     const val RESERVAS = "reservas"
@@ -48,7 +51,7 @@ fun AppNavGraph() {
 
     val loginViewModel = remember { LoginViewModel(AuthRepository(apiService)) }
     val menuViewModel = remember {
-        MenuViewModel(ProductoRepository(apiService), PedidoRepository(apiService))
+        MenuViewModel(ProductoRepository(apiService), PedidoRepository(apiService), CategoriaRepository(apiService))
     }
     val pedidosViewModel = remember { PedidosViewModel(PedidoRepository(apiService)) }
     val reservasViewModel = remember { ReservasViewModel(ReservaRepository(apiService)) }
@@ -56,45 +59,38 @@ fun AppNavGraph() {
     if (usuarioActual == null) {
         LoginScreen(
             viewModel = loginViewModel,
-            onLoginExitoso = { usuario ->
-                usuarioActual = usuario
-            }
+            onLoginExitoso = { usuario -> usuarioActual = usuario }
         )
     } else {
         val usuario = usuarioActual!!
-        ClienteScaffold(
-            navController = navController,
-            content = {
-                NavHost(
-                    navController = navController,
-                    startDestination = Rutas.MENU,
-                    modifier = Modifier.padding(it)
-                ) {
-                    composable(Rutas.MENU) {
-                        MenuScreen(
-                            viewModel = menuViewModel,
-                            clienteId = usuario.clienteId ?: usuario.idUsuario,
-                            onPedidoExitoso = { codigo ->
-                                navController.navigate(Rutas.PEDIDOS)
-                            }
-                        )
-                    }
-                    composable(Rutas.PEDIDOS) {
-                        PedidosScreen(
-                            viewModel = pedidosViewModel,
-                            clienteId = usuario.clienteId ?: usuario.idUsuario
-                        )
-                    }
-                    composable(Rutas.RESERVAS) {
-                        ReservasScreen(
-                            viewModel = reservasViewModel,
-                            clienteId = usuario.clienteId ?: usuario.idUsuario,
-                            onReservaExitosa = { _ -> }
-                        )
-                    }
+        val clienteId = usuario.clienteId ?: usuario.idUsuario
+
+        ClienteScaffold(navController = navController) { paddingValues ->
+            NavHost(
+                navController = navController,
+                startDestination = Rutas.MENU,
+                modifier = Modifier.padding(paddingValues)
+            ) {
+                composable(Rutas.MENU) {
+                    MenuScreen(
+                        viewModel = menuViewModel,
+                        clienteId = clienteId,
+                        nombreUsuario = usuario.nombre,
+                        onPedidoExitoso = { navController.navigate(Rutas.PEDIDOS) }
+                    )
+                }
+                composable(Rutas.PEDIDOS) {
+                    PedidosScreen(viewModel = pedidosViewModel, clienteId = clienteId)
+                }
+                composable(Rutas.RESERVAS) {
+                    ReservasScreen(
+                        viewModel = reservasViewModel,
+                        clienteId = clienteId,
+                        onReservaExitosa = { }
+                    )
                 }
             }
-        )
+        }
     }
 }
 
@@ -107,17 +103,18 @@ fun ClienteScaffold(
     val rutaActual = navBackStackEntry?.destination?.route
 
     val tabs = listOf(
-        Rutas.MENU to "Menu",
-        Rutas.PEDIDOS to "Pedidos",
-        Rutas.RESERVAS to "Reservas"
+        Triple(Rutas.MENU, "☕", "Menu"),
+        Triple(Rutas.PEDIDOS, "🛒", "Pedidos"),
+        Triple(Rutas.RESERVAS, "📅", "Reservas")
     )
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                tabs.forEach { (ruta, label) ->
+            NavigationBar(containerColor = CafeOscuro) {
+                tabs.forEach { (ruta, icono, label) ->
+                    val seleccionado = rutaActual == ruta
                     NavigationBarItem(
-                        selected = rutaActual == ruta,
+                        selected = seleccionado,
                         onClick = {
                             navController.navigate(ruta) {
                                 popUpTo(Rutas.MENU) { saveState = true }
@@ -125,8 +122,13 @@ fun ClienteScaffold(
                                 restoreState = true
                             }
                         },
-                        label = { Text(label) },
-                        icon = {}
+                        label = { Text(label, fontSize = if (seleccionado) 12.sp else 11.sp) },
+                        icon = { Text(icono, fontSize = 20.sp) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedTextColor = Dorado,
+                            unselectedTextColor = TextoGris,
+                            indicatorColor = Dorado.copy(alpha = 0.2f)
+                        )
                     )
                 }
             }
@@ -134,3 +136,6 @@ fun ClienteScaffold(
         content = content
     )
 }
+
+private val Int.sp get() = androidx.compose.ui.unit.TextUnit(this.toFloat(), androidx.compose.ui.unit.TextUnitType.Sp)
+private val Float.sp get() = androidx.compose.ui.unit.TextUnit(this, androidx.compose.ui.unit.TextUnitType.Sp)

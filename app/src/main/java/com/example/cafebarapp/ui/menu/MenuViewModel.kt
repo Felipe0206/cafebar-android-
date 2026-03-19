@@ -2,10 +2,12 @@ package com.example.cafebarapp.ui.menu
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cafebarapp.data.model.Categoria
 import com.example.cafebarapp.data.model.DetallePedido
 import com.example.cafebarapp.data.model.ItemCarrito
 import com.example.cafebarapp.data.model.NuevoPedido
 import com.example.cafebarapp.data.model.Producto
+import com.example.cafebarapp.data.repository.CategoriaRepository
 import com.example.cafebarapp.data.repository.PedidoRepository
 import com.example.cafebarapp.data.repository.ProductoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +29,8 @@ sealed class PedidoEstado {
 
 class MenuViewModel(
     private val productoRepository: ProductoRepository,
-    private val pedidoRepository: PedidoRepository
+    private val pedidoRepository: PedidoRepository,
+    private val categoriaRepository: CategoriaRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<MenuUiState>(MenuUiState.Loading)
@@ -39,19 +42,52 @@ class MenuViewModel(
     private val _pedidoEstado = MutableStateFlow<PedidoEstado>(PedidoEstado.Idle)
     val pedidoEstado: StateFlow<PedidoEstado> = _pedidoEstado
 
+    private val _categorias = MutableStateFlow<List<Categoria>>(emptyList())
+    val categorias: StateFlow<List<Categoria>> = _categorias
+
+    private val _categoriaSeleccionada = MutableStateFlow<Int?>(null)
+    val categoriaSeleccionada: StateFlow<Int?> = _categoriaSeleccionada
+
+    private var todosLosProductos: List<Producto> = emptyList()
+
     init {
-        cargarProductos()
+        cargarDatos()
     }
 
-    fun cargarProductos() {
+    fun cargarDatos() {
         viewModelScope.launch {
             _uiState.value = MenuUiState.Loading
+            // Cargar categorías
+            categoriaRepository.getCategorias().onSuccess { cats ->
+                _categorias.value = cats.filter { it.activo }
+            }
+            // Cargar productos
             val result = productoRepository.getProductos()
-            _uiState.value = result.fold(
-                onSuccess = { MenuUiState.Success(it.filter { p -> p.disponible }) },
-                onFailure = { MenuUiState.Error(it.message ?: "Error al cargar menú") }
+            result.fold(
+                onSuccess = { productos ->
+                    todosLosProductos = productos.filter { it.disponible }
+                    aplicarFiltro()
+                },
+                onFailure = {
+                    _uiState.value = MenuUiState.Error(it.message ?: "Error al cargar menú")
+                }
             )
         }
+    }
+
+    fun seleccionarCategoria(idCategoria: Int?) {
+        _categoriaSeleccionada.value = idCategoria
+        aplicarFiltro()
+    }
+
+    private fun aplicarFiltro() {
+        val filtro = _categoriaSeleccionada.value
+        val filtrados = if (filtro == null) {
+            todosLosProductos
+        } else {
+            todosLosProductos.filter { it.idCategoria == filtro }
+        }
+        _uiState.value = MenuUiState.Success(filtrados)
     }
 
     fun agregarAlCarrito(producto: Producto) {
@@ -80,13 +116,14 @@ class MenuViewModel(
 
     fun totalCarrito(): Double = _carrito.value.sumOf { it.producto.precio * it.cantidad }
 
+    fun cantidadCarrito(): Int = _carrito.value.sumOf { it.cantidad }
+
     fun enviarPedido(clienteId: Int) {
         val items = _carrito.value
         if (items.isEmpty()) {
             _pedidoEstado.value = PedidoEstado.Error("El carrito está vacío")
             return
         }
-
         viewModelScope.launch {
             _pedidoEstado.value = PedidoEstado.Enviando
             val detalles = items.map {

@@ -2,6 +2,7 @@ package com.example.cafebarapp.ui.reservas
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cafebarapp.data.model.Mesa
 import com.example.cafebarapp.data.model.NuevaReserva
 import com.example.cafebarapp.data.model.Reserva
 import com.example.cafebarapp.data.repository.ReservaRepository
@@ -30,6 +31,9 @@ class ReservasViewModel(private val repository: ReservaRepository) : ViewModel()
     private val _crearEstado = MutableStateFlow<CrearReservaEstado>(CrearReservaEstado.Idle)
     val crearEstado: StateFlow<CrearReservaEstado> = _crearEstado
 
+    private val _mesas = MutableStateFlow<List<Mesa>>(emptyList())
+    val mesas: StateFlow<List<Mesa>> = _mesas
+
     fun cargarReservas(clienteId: Int) {
         viewModelScope.launch {
             _uiState.value = ReservasUiState.Loading
@@ -41,12 +45,21 @@ class ReservasViewModel(private val repository: ReservaRepository) : ViewModel()
         }
     }
 
+    fun cargarMesas() {
+        viewModelScope.launch {
+            repository.getMesasLibres().onSuccess { _mesas.value = it }
+        }
+    }
+
     fun crearReserva(clienteId: Int, mesaId: Int, fecha: String, hora: String, personas: Int) {
         if (fecha.isBlank() || hora.isBlank() || personas <= 0) {
             _crearEstado.value = CrearReservaEstado.Error("Complete todos los campos")
             return
         }
-
+        if (mesaId <= 0) {
+            _crearEstado.value = CrearReservaEstado.Error("Seleccione una mesa")
+            return
+        }
         viewModelScope.launch {
             _crearEstado.value = CrearReservaEstado.Enviando
             val nueva = NuevaReserva(clienteId, mesaId, fecha, hora, personas)
@@ -55,6 +68,14 @@ class ReservasViewModel(private val repository: ReservaRepository) : ViewModel()
                 onSuccess = { CrearReservaEstado.Exitoso(it.codigoConfirmacion) },
                 onFailure = { CrearReservaEstado.Error(it.message ?: "Error al crear reserva") }
             )
+        }
+    }
+
+    fun cancelarReserva(idReserva: Int, clienteId: Int) {
+        viewModelScope.launch {
+            repository.cancelarReserva(idReserva).onSuccess {
+                cargarReservas(clienteId)
+            }
         }
     }
 
